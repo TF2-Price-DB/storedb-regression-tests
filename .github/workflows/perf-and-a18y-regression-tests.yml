@@ -37,7 +37,8 @@ jobs:
             scanner: {
               device: 'mobile',
               samples: 3,
-              maxRoutes: ${{ env.MAX_PAGES }}
+              maxRoutes: ${{ env.MAX_PAGES }},
+              skipJavascript: false,
             },
             discovery: {
               maxPages: ${{ env.MAX_PAGES }},
@@ -48,14 +49,7 @@ jobs:
           EOF
 
       - name: Run Unlighthouse CI
-        # Explicitly use the config file
         run: unlighthouse-ci --config unlighthouse.config.ts --reporter json
-
-      - name: Debug File Structure
-        # This helps us see if the JSON is nested in a subfolder (common with unlighthouse)
-        run: |
-          echo "Listing .unlighthouse directory:"
-          find .unlighthouse -maxdepth 4 || echo "find command failed"
 
       - name: Process Results & Compare History
         id: process
@@ -91,126 +85,106 @@ jobs:
               return null;
             }
 
-            console.log("--- DEBUG START ---");
-
             // 1. Locate the JSON file
             console.log(`Searching for result file in ${unlighthouseBaseDir}...`);
             const jsonFilePath = findResultFile(unlighthouseBaseDir);
             
             if (!jsonFilePath) {
-              console.error("❌ CRITICAL: Could not find ci-result.json or unlighthouse.json anywhere in .unlighthouse/");
               core.setFailed("Missing Unlighthouse JSON output file");
               return;
             }
             console.log(`✅ Found JSON results at: ${jsonFilePath}`);
 
-            // 2. Read and Inspect Raw Data
+            // 2. Read Data
             let rawData = [];
             try {
               const fileContent = fs.readFileSync(jsonFilePath, 'utf8');
               const jsonContent = JSON.parse(fileContent);
-              
-              // Check if it is an array or object
-              if (Array.isArray(jsonContent)) {
-                console.log(`JSON is an Array with length: ${jsonContent.length}`);
-                rawData = jsonContent;
-              } else if (jsonContent.routes && Array.isArray(jsonContent.routes)) {
-                console.log(`JSON is an Object with .routes array length: ${jsonContent.routes.length}`);
-                rawData = jsonContent.routes;
-              } else {
-                console.log("⚠️ JSON structure is unknown. Keys:", Object.keys(jsonContent));
-                rawData = [];
-              }
+              rawData = Array.isArray(jsonContent) ? jsonContent : (jsonContent.routes || []);
             } catch (e) {
-              console.error(`❌ Failed to parse JSON: ${e.message}`);
-              core.setFailed("Invalid JSON");
+              core.setFailed(`Failed to parse JSON: ${e.message}`);
               return;
-            }
-
-            if (rawData.length > 0) {
-              console.log("--- SAMPLING DATA STRUCTURE (First Item) ---");
-              console.log(JSON.stringify(rawData[0], null, 2));
-            } else {
-              console.error("❌ Raw data array is empty.");
             }
 
             // 3. Process Data
             const todayData = [];
-            let skippedCount = 0;
-
-            console.log("--- PROCESSING ROUTES ---");
+            
             rawData.forEach((route, index) => {
-              // DEBUG: Log first 3 routes processing
-              const isDebug = index < 3; 
-              
-              if (!route.path) {
-                if(isDebug) console.log(`Skipping item ${index}: No 'path' property.`);
-                skippedCount++;
-                return;
+              if (!route.path) return;
+
+              // FIX: Handle Flat Structure vs Nested Structure
+              // The logs showed the data is flat (e.g. route.performance), not nested in scores
+              const getVal = (key) => {
+                if (route[key] !== undefined) return route[key];
+                if (route.scores && route.scores[key] !== undefined) return route.scores[key];
+                return 0;
+              };
+
+              // Extract scores using the helper
+              const p = getScore(getVal('performance'));
+              const a = getScore(getVal('accessibility'));
+              const s = getScore(getVal('seo'));
+              const b = getScore(getVal('best-practices'));
+
+              // Only add if we actually found data (assuming 0 might be valid but rare for all)
+              // We check if performance is > 0 to imply a successful scan
+              if (p > 0 || a > 0) {
+                 todayData.push({
+                    path: route.path,
+                    performance: p,
+                    accessibility: a,
+                    seo: s,
+                    bestPractices: b
+                 });
+              } else {
+                 console.log(`Skipping ${route.path} - Seems like 0 scores (Scan failed?)`);
               }
-
-              if (!route.scores) {
-                if(isDebug) console.log(`Skipping item ${index} (${route.path}): 'scores' property is undefined.`);
-                // Log what keys exist instead
-                if(isDebug) console.log(`Available keys: ${Object.keys(route)}`);
-                skippedCount++;
-                return;
-              }
-
-              // Extract scores
-              const p = getScore(route.scores.performance);
-              const a = getScore(route.scores.accessibility);
-              const s = getScore(route.scores.seo);
-              const b = getScore(route.scores['best-practices']);
-
-              if(isDebug) console.log(`Item ${index} (${route.path}): Perf=${p}, Acc=${a}`);
-
-              todayData.push({
-                path: route.path,
-                performance: p,
-                accessibility: a,
-                seo: s,
-                bestPractices: b
-              });
             });
 
-            console.log(`--- PROCESSING SUMMARY ---`);
-            console.log(`Total Routes Found: ${rawData.length}`);
-            console.log(`Skipped (Invalid/No Scores): ${skippedCount}`);
             console.log(`Valid Rows Generated: ${todayData.length}`);
 
             if (todayData.length === 0) {
-              console.error("❌ No valid data rows were generated. CSV will be empty.");
-              // Do not fail hard, so we can see logs, but warn heavily
+              core.setFailed("No valid data rows were generated.");
+              return;
             }
 
-            // 4. Save CSV
+            // 4. Determine Filename (Manual vs Schedule)
             if (!fs.existsSync(historyDir)) {
               fs.mkdirSync(historyDir, { recursive: true });
             }
 
+            const now = new Date();
+            const dateStr = formatDate(now);
+            let filename = `${dateStr}.csv`;
+
+            // If manually triggered, append timestamp to avoid overwriting daily log
+            if (context.eventName === 'workflow_dispatch') {
+               const timeStr = now.toISOString().split('T')[1].split('.')[0].replace(/:/g, '-');
+               filename = `${dateStr}_${timeStr}.csv`;
+               console.log("ℹ️ Manual trigger detected: using timestamped filename.");
+            }
+
+            const finalFilePath = path.join(historyDir, filename);
+
+            // 5. Save CSV
             const header = 'Path,Performance,Accessibility,SEO,Best Practices\n';
             const csvRows = todayData.map(r => 
               `${r.path},${r.performance},${r.accessibility},${r.seo},${r.bestPractices}`
             ).join('\n');
             
-            const today = new Date();
-            const todayStr = formatDate(today);
-            const todayFile = path.join(historyDir, `${todayStr}.csv`);
-            
-            // fs.writeFileSync handles overwriting by default
-            fs.writeFileSync(todayFile, header + csvRows);
-            console.log(`✅ Saved results to ${todayFile}`);
+            fs.writeFileSync(finalFilePath, header + csvRows);
+            console.log(`✅ Saved results to ${finalFilePath}`);
 
-            // 5. Historical Comparison (Logic Preserved)
+            // 6. Historical Comparison 
+            // We only compare against standard daily files (YYYY-MM-DD.csv), not manual ones
             const getPastDate = (daysAgo) => {
               const d = new Date();
               d.setDate(d.getDate() - daysAgo);
               return formatDate(d);
             };
 
-            const loadCsvMap = (dateStr) => {
-              const file = path.join(historyDir, `${dateStr}.csv`);
+            const loadCsvMap = (targetDateStr) => {
+              const file = path.join(historyDir, `${targetDateStr}.csv`);
               if (!fs.existsSync(file)) return null;
               
               try {
@@ -224,7 +198,6 @@ jobs:
                 });
                 return map;
               } catch (e) {
-                console.log(`Error reading history file ${file}: ${e.message}`);
                 return null;
               }
             };
@@ -235,7 +208,7 @@ jobs:
             const yesterdayMap = loadCsvMap(yesterdayStr);
             const lastWeekMap = loadCsvMap(lastWeekStr);
 
-            let markdownReport = `### 📉 Performance Regression Report (${todayStr})\n\n`;
+            let markdownReport = `### 📉 Performance Regression Report (${filename})\n\n`;
             let regressionCount = 0;
 
             const checkRegression = (url, metricName, current, old, dateLabel) => {
@@ -267,19 +240,18 @@ jobs:
             }
 
             await core.summary.addRaw(markdownReport).write();
-            core.setOutput('today_file', todayFile);
-            console.log("--- DEBUG END ---");
+            core.setOutput('csv_file', finalFilePath);
 
       - name: Commit CSV to Repo
         run: |
           git config --global user.name "GitHub Action Runner"
           git config --global user.email "actions@github.com"
-          git add ${{ env.HISTORY_DIR }}/*.csv
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Add performance audit for $(date +'%Y-%m-%d')" && git push)
+          git add ${{ steps.process.outputs.csv_file }}
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Add performance audit" && git push)
 
       - name: Upload CSV Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-audit-debug
-          path: ${{ steps.process.outputs.today_file }}
+          name: performance-audit-result
+          path: ${{ steps.process.outputs.csv_file }}

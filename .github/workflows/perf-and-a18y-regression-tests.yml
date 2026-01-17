@@ -2,19 +2,16 @@ name: Daily Performance & Accessibility Audit
 
 on:
   schedule:
-    # Runs at 00:00 UTC every day
-    - cron: '0 0 * * *'
+    - cron: '51 14 * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 env:
-  # UPDATE THIS TO YOUR WEBSITE URL
   SITE_URL: 'https://store.pricedb.io'
-  # The folder where history will be stored in the repo
   HISTORY_DIR: 'hist'
-  # LIMIT PAGES FOR DEBUGGING (Set to a high number like 500 for production)
+  # Limit pages for debugging
   MAX_PAGES: 10
 
 jobs:
@@ -33,7 +30,6 @@ jobs:
         run: npm install -g @unlighthouse/cli puppeteer
 
       - name: Create Unlighthouse Config
-        # We generate a config file to handle samples, mobile, and limits cleanly
         run: |
           cat <<EOF > unlighthouse.config.ts
           export default {
@@ -41,18 +37,25 @@ jobs:
             scanner: {
               device: 'mobile',
               samples: 3,
-              maxRoutes: ${{ env.MAX_PAGES }},
+              maxRoutes: ${{ env.MAX_PAGES }}
             },
             discovery: {
               maxPages: ${{ env.MAX_PAGES }},
             },
-            debug: true
+            debug: true,
+            outputPath: '.unlighthouse'
           }
           EOF
 
       - name: Run Unlighthouse CI
-        # Runs using the config file we just created
-        run: unlighthouse-ci --reporter json
+        # Explicitly use the config file
+        run: unlighthouse-ci --config unlighthouse.config.ts --reporter json
+
+      - name: Debug File Structure
+        # This helps us see if the JSON is nested in a subfolder (common with unlighthouse)
+        run: |
+          echo "Listing .unlighthouse directory:"
+          find .unlighthouse -maxdepth 4 || echo "find command failed"
 
       - name: Process Results & Compare History
         id: process
@@ -64,65 +67,128 @@ jobs:
 
             // --- Configuration ---
             const historyDir = process.env.HISTORY_DIR;
-            const unlighthouseDir = '.unlighthouse';
-            const threshold = 2; // Regression threshold points
+            const unlighthouseBaseDir = '.unlighthouse';
+            const threshold = 2; 
 
             // --- Helpers ---
             const formatDate = (date) => date.toISOString().split('T')[0];
             const getScore = (val) => Math.round((val || 0) * 100);
 
-            // Ensure history directory exists
+            // Recursive function to find the ci-result.json file
+            function findResultFile(dir) {
+              if (!fs.existsSync(dir)) return null;
+              const files = fs.readdirSync(dir);
+              for (const file of files) {
+                const fullPath = path.join(dir, file);
+                const stat = fs.statSync(fullPath);
+                if (stat.isDirectory()) {
+                  const found = findResultFile(fullPath);
+                  if (found) return found;
+                } else if (file === 'ci-result.json' || file === 'unlighthouse.json') {
+                  return fullPath;
+                }
+              }
+              return null;
+            }
+
+            console.log("--- DEBUG START ---");
+
+            // 1. Locate the JSON file
+            console.log(`Searching for result file in ${unlighthouseBaseDir}...`);
+            const jsonFilePath = findResultFile(unlighthouseBaseDir);
+            
+            if (!jsonFilePath) {
+              console.error("❌ CRITICAL: Could not find ci-result.json or unlighthouse.json anywhere in .unlighthouse/");
+              core.setFailed("Missing Unlighthouse JSON output file");
+              return;
+            }
+            console.log(`✅ Found JSON results at: ${jsonFilePath}`);
+
+            // 2. Read and Inspect Raw Data
+            let rawData = [];
+            try {
+              const fileContent = fs.readFileSync(jsonFilePath, 'utf8');
+              const jsonContent = JSON.parse(fileContent);
+              
+              // Check if it is an array or object
+              if (Array.isArray(jsonContent)) {
+                console.log(`JSON is an Array with length: ${jsonContent.length}`);
+                rawData = jsonContent;
+              } else if (jsonContent.routes && Array.isArray(jsonContent.routes)) {
+                console.log(`JSON is an Object with .routes array length: ${jsonContent.routes.length}`);
+                rawData = jsonContent.routes;
+              } else {
+                console.log("⚠️ JSON structure is unknown. Keys:", Object.keys(jsonContent));
+                rawData = [];
+              }
+            } catch (e) {
+              console.error(`❌ Failed to parse JSON: ${e.message}`);
+              core.setFailed("Invalid JSON");
+              return;
+            }
+
+            if (rawData.length > 0) {
+              console.log("--- SAMPLING DATA STRUCTURE (First Item) ---");
+              console.log(JSON.stringify(rawData[0], null, 2));
+            } else {
+              console.error("❌ Raw data array is empty.");
+            }
+
+            // 3. Process Data
+            const todayData = [];
+            let skippedCount = 0;
+
+            console.log("--- PROCESSING ROUTES ---");
+            rawData.forEach((route, index) => {
+              // DEBUG: Log first 3 routes processing
+              const isDebug = index < 3; 
+              
+              if (!route.path) {
+                if(isDebug) console.log(`Skipping item ${index}: No 'path' property.`);
+                skippedCount++;
+                return;
+              }
+
+              if (!route.scores) {
+                if(isDebug) console.log(`Skipping item ${index} (${route.path}): 'scores' property is undefined.`);
+                // Log what keys exist instead
+                if(isDebug) console.log(`Available keys: ${Object.keys(route)}`);
+                skippedCount++;
+                return;
+              }
+
+              // Extract scores
+              const p = getScore(route.scores.performance);
+              const a = getScore(route.scores.accessibility);
+              const s = getScore(route.scores.seo);
+              const b = getScore(route.scores['best-practices']);
+
+              if(isDebug) console.log(`Item ${index} (${route.path}): Perf=${p}, Acc=${a}`);
+
+              todayData.push({
+                path: route.path,
+                performance: p,
+                accessibility: a,
+                seo: s,
+                bestPractices: b
+              });
+            });
+
+            console.log(`--- PROCESSING SUMMARY ---`);
+            console.log(`Total Routes Found: ${rawData.length}`);
+            console.log(`Skipped (Invalid/No Scores): ${skippedCount}`);
+            console.log(`Valid Rows Generated: ${todayData.length}`);
+
+            if (todayData.length === 0) {
+              console.error("❌ No valid data rows were generated. CSV will be empty.");
+              // Do not fail hard, so we can see logs, but warn heavily
+            }
+
+            // 4. Save CSV
             if (!fs.existsSync(historyDir)) {
               fs.mkdirSync(historyDir, { recursive: true });
             }
 
-            // 1. Read Unlighthouse JSON Output
-            let rawData = [];
-            try {
-              // Usually in .unlighthouse/ci-result.json
-              const jsonPath = path.join(unlighthouseDir, 'ci-result.json');
-              
-              if (!fs.existsSync(jsonPath)) {
-                 // Fallback: sometimes it's unlighthouse.json or in a subdir depending on version
-                 const altPath = path.join(unlighthouseDir, 'unlighthouse.json');
-                 if(fs.existsSync(altPath)) {
-                    console.log(`Found results at ${altPath}`);
-                    const content = JSON.parse(fs.readFileSync(altPath, 'utf8'));
-                    rawData = content.routes || [];
-                 } else {
-                    throw new Error(`Could not find ci-result.json in ${unlighthouseDir}`);
-                 }
-              } else {
-                 console.log(`Found results at ${jsonPath}`);
-                 const content = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-                 // Support different JSON structures (array vs object with routes property)
-                 rawData = Array.isArray(content) ? content : (content.routes || []);
-              }
-            } catch (e) {
-              core.setFailed(`Failed to read Unlighthouse results: ${e.message}`);
-              return;
-            }
-
-            if (!rawData || rawData.length === 0) {
-              core.setFailed("No routes found in Unlighthouse output.");
-              return;
-            }
-
-            // 2. Convert to CSV format
-            // FIX: Filter out routes where scan failed (scores is undefined)
-            const validRoutes = rawData.filter(r => r.scores && r.path);
-            
-            console.log(`Processing ${validRoutes.length} valid scanned routes (out of ${rawData.length} total found).`);
-
-            const todayData = validRoutes.map(route => ({
-              path: route.path,
-              performance: getScore(route.scores.performance),
-              accessibility: getScore(route.scores.accessibility),
-              seo: getScore(route.scores.seo),
-              bestPractices: getScore(route.scores['best-practices'])
-            }));
-
-            // Generate CSV String
             const header = 'Path,Performance,Accessibility,SEO,Best Practices\n';
             const csvRows = todayData.map(r => 
               `${r.path},${r.performance},${r.accessibility},${r.seo},${r.bestPractices}`
@@ -132,11 +198,11 @@ jobs:
             const todayStr = formatDate(today);
             const todayFile = path.join(historyDir, `${todayStr}.csv`);
             
-            // Save Today's CSV
+            // fs.writeFileSync handles overwriting by default
             fs.writeFileSync(todayFile, header + csvRows);
-            console.log(`Saved results to ${todayFile}`);
+            console.log(`✅ Saved results to ${todayFile}`);
 
-            // 3. Load Historical Data
+            // 5. Historical Comparison (Logic Preserved)
             const getPastDate = (daysAgo) => {
               const d = new Date();
               d.setDate(d.getDate() - daysAgo);
@@ -145,43 +211,35 @@ jobs:
 
             const loadCsvMap = (dateStr) => {
               const file = path.join(historyDir, `${dateStr}.csv`);
-              if (!fs.existsSync(file)) {
-                console.log(`No history file found for ${dateStr}`);
+              if (!fs.existsSync(file)) return null;
+              
+              try {
+                const content = fs.readFileSync(file, 'utf8').trim().split('\n');
+                const map = new Map();
+                content.slice(1).forEach(row => {
+                  const cols = row.split(',');
+                  if (cols.length >= 3) {
+                    map.set(cols[0], { perf: parseInt(cols[1]), acc: parseInt(cols[2]) });
+                  }
+                });
+                return map;
+              } catch (e) {
+                console.log(`Error reading history file ${file}: ${e.message}`);
                 return null;
               }
-              
-              const content = fs.readFileSync(file, 'utf8').trim().split('\n');
-              const map = new Map();
-              // Skip header, parse rows
-              content.slice(1).forEach(row => {
-                const cols = row.split(',');
-                if (cols.length >= 3) {
-                  // key: path, value: { perf, acc }
-                  map.set(cols[0], { 
-                    perf: parseInt(cols[1]), 
-                    acc: parseInt(cols[2]) 
-                  });
-                }
-              });
-              return map;
             };
 
             const yesterdayStr = getPastDate(1);
             const lastWeekStr = getPastDate(7);
 
-            console.log(`Comparing against Yesterday (${yesterdayStr}) and Last Week (${lastWeekStr})`);
-
             const yesterdayMap = loadCsvMap(yesterdayStr);
             const lastWeekMap = loadCsvMap(lastWeekStr);
 
-            // 4. Compare and Report
             let markdownReport = `### 📉 Performance Regression Report (${todayStr})\n\n`;
             let regressionCount = 0;
 
             const checkRegression = (url, metricName, current, old, dateLabel) => {
-              // Ensure we have valid numbers to compare
               if (isNaN(current) || isNaN(old)) return;
-              
               const diff = old - current;
               if (diff > threshold) {
                 regressionCount++;
@@ -190,14 +248,11 @@ jobs:
             };
 
             todayData.forEach(page => {
-              // Compare Yesterday
               if (yesterdayMap && yesterdayMap.has(page.path)) {
                 const y = yesterdayMap.get(page.path);
                 checkRegression(page.path, 'Performance', page.performance, y.perf, 'Yesterday');
                 checkRegression(page.path, 'Accessibility', page.accessibility, y.acc, 'Yesterday');
               }
-
-              // Compare Last Week
               if (lastWeekMap && lastWeekMap.has(page.path)) {
                 const w = lastWeekMap.get(page.path);
                 checkRegression(page.path, 'Performance', page.performance, w.perf, 'Last Week');
@@ -206,28 +261,25 @@ jobs:
             });
 
             if (regressionCount === 0) {
-              markdownReport += "✅ No significant regressions detected compared to yesterday or last week.";
+              markdownReport += "✅ No significant regressions detected.";
             } else {
-                markdownReport += `\n**Total Regressions Found:** ${regressionCount}`;
+              markdownReport += `\n**Total Regressions:** ${regressionCount}`;
             }
 
-            // Output to Job Summary
             await core.summary.addRaw(markdownReport).write();
-            
-            // Set output for the artifact step
             core.setOutput('today_file', todayFile);
+            console.log("--- DEBUG END ---");
 
       - name: Commit CSV to Repo
         run: |
           git config --global user.name "GitHub Action Runner"
           git config --global user.email "actions@github.com"
           git add ${{ env.HISTORY_DIR }}/*.csv
-          # Only commit if there are changes to avoid empty commit errors
           git diff --quiet && git diff --staged --quiet || (git commit -m "Add performance audit for $(date +'%Y-%m-%d')" && git push)
 
       - name: Upload CSV Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-audit-${{ env.MAX_PAGES }}-pages
+          name: performance-audit-debug
           path: ${{ steps.process.outputs.today_file }}

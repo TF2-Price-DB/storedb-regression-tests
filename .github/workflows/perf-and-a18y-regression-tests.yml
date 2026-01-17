@@ -39,6 +39,10 @@ jobs:
               samples: 3,
               maxRoutes: ${{ env.MAX_PAGES }},
               skipJavascript: false,
+              timeout: 900000, 
+            },
+            puppeteerOptions: {
+              timeout: 900000,
             },
             discovery: {
               maxPages: ${{ env.MAX_PAGES }},

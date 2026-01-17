@@ -2,8 +2,8 @@ name: Daily Performance & Accessibility Audit
 
 on:
   schedule:
-    # Runs at 14:51 UTC every day
-    - cron: '51 14 * * *'
+    # Runs at 00:00 UTC every day
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 permissions:
@@ -14,6 +14,8 @@ env:
   SITE_URL: 'https://store.pricedb.io'
   # The folder where history will be stored in the repo
   HISTORY_DIR: 'hist'
+  # LIMIT PAGES FOR DEBUGGING (Set to a high number like 500 for production)
+  MAX_PAGES: 10
 
 jobs:
   audit-and-compare:
@@ -25,14 +27,32 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
 
       - name: Install Unlighthouse
-        run: npm install -g @unlighthouse/cli
+        run: npm install -g @unlighthouse/cli puppeteer
+
+      - name: Create Unlighthouse Config
+        # We generate a config file to handle samples, mobile, and limits cleanly
+        run: |
+          cat <<EOF > unlighthouse.config.ts
+          export default {
+            site: '${{ env.SITE_URL }}',
+            scanner: {
+              device: 'mobile',
+              samples: 3, # Run 3 passes to reduce noise
+              maxRoutes: ${{ env.MAX_PAGES }}, # Limit number of pages scanned
+            },
+            discovery: {
+              maxPages: ${{ env.MAX_PAGES }}, # Stop crawling after finding this many pages
+            },
+            debug: true
+          }
+          EOF
 
       - name: Run Unlighthouse CI
-        # outputs JSON results to .unlighthouse/
-        run: unlighthouse-ci --site ${{ env.SITE_URL }} --reporter json
+        # Runs using the config file we just created
+        run: unlighthouse-ci --reporter json
 
       - name: Process Results & Compare History
         id: process
@@ -44,7 +64,7 @@ jobs:
 
             // --- Configuration ---
             const historyDir = process.env.HISTORY_DIR;
-            const unlighthouseDir = '.unlighthouse'; // default output dir
+            const unlighthouseDir = '.unlighthouse';
             const threshold = 2; // Regression threshold points
 
             // --- Helpers ---
@@ -57,33 +77,44 @@ jobs:
             }
 
             // 1. Read Unlighthouse JSON Output
-            // Unlighthouse CI typically outputs a ci-result.json or similar. 
-            // We look for the main manifest or scan results.
-            // Adjust filename if version differs, usually 'ci-result.json' or 'unlighthouse.json'
             let rawData = [];
             try {
-              // Try to find the json file containing routes
+              // Usually in .unlighthouse/ci-result.json
               const jsonPath = path.join(unlighthouseDir, 'ci-result.json');
-              if (fs.existsSync(jsonPath)) {
-                const content = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-                // Depending on version, data might be nested. 
-                rawData = Array.isArray(content) ? content : (content.routes || []);
+              
+              if (!fs.existsSync(jsonPath)) {
+                 // Fallback: sometimes it's unlighthouse.json or in a subdir depending on version
+                 const altPath = path.join(unlighthouseDir, 'unlighthouse.json');
+                 if(fs.existsSync(altPath)) {
+                    console.log(`Found results at ${altPath}`);
+                    const content = JSON.parse(fs.readFileSync(altPath, 'utf8'));
+                    rawData = content.routes || [];
+                 } else {
+                    throw new Error(`Could not find ci-result.json in ${unlighthouseDir}`);
+                 }
               } else {
-                console.log("Could not find ci-result.json, checking alternatives...");
-                // Fallback logic if specific json not found, specific to unlighthouse versions
+                 console.log(`Found results at ${jsonPath}`);
+                 const content = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+                 // Support different JSON structures (array vs object with routes property)
+                 rawData = Array.isArray(content) ? content : (content.routes || []);
               }
             } catch (e) {
               core.setFailed(`Failed to read Unlighthouse results: ${e.message}`);
               return;
             }
 
-            if (rawData.length === 0) {
+            if (!rawData || rawData.length === 0) {
               core.setFailed("No routes found in Unlighthouse output.");
               return;
             }
 
-            // 2. Convert to CSV format (array of objects)
-            const todayData = rawData.map(route => ({
+            // 2. Convert to CSV format
+            // FIX: Filter out routes where scan failed (scores is undefined)
+            const validRoutes = rawData.filter(r => r.scores && r.path);
+            
+            console.log(`Processing ${validRoutes.length} valid scanned routes (out of ${rawData.length} total found).`);
+
+            const todayData = validRoutes.map(route => ({
               path: route.path,
               performance: getScore(route.scores.performance),
               accessibility: getScore(route.scores.accessibility),
@@ -114,7 +145,10 @@ jobs:
 
             const loadCsvMap = (dateStr) => {
               const file = path.join(historyDir, `${dateStr}.csv`);
-              if (!fs.existsSync(file)) return null;
+              if (!fs.existsSync(file)) {
+                console.log(`No history file found for ${dateStr}`);
+                return null;
+              }
               
               const content = fs.readFileSync(file, 'utf8').trim().split('\n');
               const map = new Map();
@@ -122,6 +156,7 @@ jobs:
               content.slice(1).forEach(row => {
                 const cols = row.split(',');
                 if (cols.length >= 3) {
+                  // key: path, value: { perf, acc }
                   map.set(cols[0], { 
                     perf: parseInt(cols[1]), 
                     acc: parseInt(cols[2]) 
@@ -134,17 +169,22 @@ jobs:
             const yesterdayStr = getPastDate(1);
             const lastWeekStr = getPastDate(7);
 
+            console.log(`Comparing against Yesterday (${yesterdayStr}) and Last Week (${lastWeekStr})`);
+
             const yesterdayMap = loadCsvMap(yesterdayStr);
             const lastWeekMap = loadCsvMap(lastWeekStr);
 
             // 4. Compare and Report
             let markdownReport = `### 📉 Performance Regression Report (${todayStr})\n\n`;
-            let hasRegressions = false;
+            let regressionCount = 0;
 
             const checkRegression = (url, metricName, current, old, dateLabel) => {
+              // Ensure we have valid numbers to compare
+              if (isNaN(current) || isNaN(old)) return;
+              
               const diff = old - current;
               if (diff > threshold) {
-                hasRegressions = true;
+                regressionCount++;
                 markdownReport += `- ⚠️ **${url}** - ${metricName} dropped by **${diff}** points vs ${dateLabel} (${old} -> ${current})\n`;
               }
             };
@@ -165,8 +205,10 @@ jobs:
               }
             });
 
-            if (!hasRegressions) {
+            if (regressionCount === 0) {
               markdownReport += "✅ No significant regressions detected compared to yesterday or last week.";
+            } else {
+                markdownReport += `\n**Total Regressions Found:** ${regressionCount}`;
             }
 
             // Output to Job Summary
@@ -180,11 +222,12 @@ jobs:
           git config --global user.name "GitHub Action Runner"
           git config --global user.email "actions@github.com"
           git add ${{ env.HISTORY_DIR }}/*.csv
-          # Only commit if there are changes
+          # Only commit if there are changes to avoid empty commit errors
           git diff --quiet && git diff --staged --quiet || (git commit -m "Add performance audit for $(date +'%Y-%m-%d')" && git push)
 
       - name: Upload CSV Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-audit-${{ steps.process.outputs.today_file }}
+          name: performance-audit-${{ env.MAX_PAGES }}-pages
           path: ${{ steps.process.outputs.today_file }}

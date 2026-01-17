@@ -12,7 +12,7 @@ env:
   SITE_URL: 'https://store.pricedb.io'
   HISTORY_DIR: 'hist'
   # Limit pages for debugging
-  MAX_PAGES: 10
+  MAX_PAGES: 500
 
 jobs:
   audit-and-compare:

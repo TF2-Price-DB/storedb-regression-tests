@@ -40,11 +40,11 @@ jobs:
             site: '${{ env.SITE_URL }}',
             scanner: {
               device: 'mobile',
-              samples: 3, # Run 3 passes to reduce noise
-              maxRoutes: ${{ env.MAX_PAGES }}, # Limit number of pages scanned
+              samples: 3,
+              maxRoutes: ${{ env.MAX_PAGES }},
             },
             discovery: {
-              maxPages: ${{ env.MAX_PAGES }}, # Stop crawling after finding this many pages
+              maxPages: ${{ env.MAX_PAGES }},
             },
             debug: true
           }

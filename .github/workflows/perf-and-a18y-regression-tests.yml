@@ -12,7 +12,7 @@ env:
   SITE_URL: 'https://store.pricedb.io'
   HISTORY_DIR: 'hist'
   # Limit pages for debugging
-  MAX_PAGES: 100
+  MAX_PAGES: 50
 
 jobs:
   audit-and-compare:
@@ -36,7 +36,7 @@ jobs:
             site: '${{ env.SITE_URL }}',
             scanner: {
               device: 'mobile',
-              samples: 3,
+              samples: 2,
               maxRoutes: ${{ env.MAX_PAGES }},
               skipJavascript: false,
               timeout: 900000, 

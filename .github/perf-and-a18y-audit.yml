@@ -1,0 +1,190 @@
+name: Daily Performance & Accessibility Audit
+
+on:
+  schedule:
+    # Runs at 14:51 UTC every day
+    - cron: '51 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # UPDATE THIS TO YOUR WEBSITE URL
+  SITE_URL: 'https://store.pricedb.io'
+  # The folder where history will be stored in the repo
+  HISTORY_DIR: 'hist'
+
+jobs:
+  audit-and-compare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Unlighthouse
+        run: npm install -g @unlighthouse/cli
+
+      - name: Run Unlighthouse CI
+        # outputs JSON results to .unlighthouse/
+        run: unlighthouse-ci --site ${{ env.SITE_URL }} --reporter json
+
+      - name: Process Results & Compare History
+        id: process
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // --- Configuration ---
+            const historyDir = process.env.HISTORY_DIR;
+            const unlighthouseDir = '.unlighthouse'; // default output dir
+            const threshold = 2; // Regression threshold points
+
+            // --- Helpers ---
+            const formatDate = (date) => date.toISOString().split('T')[0];
+            const getScore = (val) => Math.round((val || 0) * 100);
+
+            // Ensure history directory exists
+            if (!fs.existsSync(historyDir)) {
+              fs.mkdirSync(historyDir, { recursive: true });
+            }
+
+            // 1. Read Unlighthouse JSON Output
+            // Unlighthouse CI typically outputs a ci-result.json or similar. 
+            // We look for the main manifest or scan results.
+            // Adjust filename if version differs, usually 'ci-result.json' or 'unlighthouse.json'
+            let rawData = [];
+            try {
+              // Try to find the json file containing routes
+              const jsonPath = path.join(unlighthouseDir, 'ci-result.json');
+              if (fs.existsSync(jsonPath)) {
+                const content = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+                // Depending on version, data might be nested. 
+                rawData = Array.isArray(content) ? content : (content.routes || []);
+              } else {
+                console.log("Could not find ci-result.json, checking alternatives...");
+                // Fallback logic if specific json not found, specific to unlighthouse versions
+              }
+            } catch (e) {
+              core.setFailed(`Failed to read Unlighthouse results: ${e.message}`);
+              return;
+            }
+
+            if (rawData.length === 0) {
+              core.setFailed("No routes found in Unlighthouse output.");
+              return;
+            }
+
+            // 2. Convert to CSV format (array of objects)
+            const todayData = rawData.map(route => ({
+              path: route.path,
+              performance: getScore(route.scores.performance),
+              accessibility: getScore(route.scores.accessibility),
+              seo: getScore(route.scores.seo),
+              bestPractices: getScore(route.scores['best-practices'])
+            }));
+
+            // Generate CSV String
+            const header = 'Path,Performance,Accessibility,SEO,Best Practices\n';
+            const csvRows = todayData.map(r => 
+              `${r.path},${r.performance},${r.accessibility},${r.seo},${r.bestPractices}`
+            ).join('\n');
+            
+            const today = new Date();
+            const todayStr = formatDate(today);
+            const todayFile = path.join(historyDir, `${todayStr}.csv`);
+            
+            // Save Today's CSV
+            fs.writeFileSync(todayFile, header + csvRows);
+            console.log(`Saved results to ${todayFile}`);
+
+            // 3. Load Historical Data
+            const getPastDate = (daysAgo) => {
+              const d = new Date();
+              d.setDate(d.getDate() - daysAgo);
+              return formatDate(d);
+            };
+
+            const loadCsvMap = (dateStr) => {
+              const file = path.join(historyDir, `${dateStr}.csv`);
+              if (!fs.existsSync(file)) return null;
+              
+              const content = fs.readFileSync(file, 'utf8').trim().split('\n');
+              const map = new Map();
+              // Skip header, parse rows
+              content.slice(1).forEach(row => {
+                const cols = row.split(',');
+                if (cols.length >= 3) {
+                  map.set(cols[0], { 
+                    perf: parseInt(cols[1]), 
+                    acc: parseInt(cols[2]) 
+                  });
+                }
+              });
+              return map;
+            };
+
+            const yesterdayStr = getPastDate(1);
+            const lastWeekStr = getPastDate(7);
+
+            const yesterdayMap = loadCsvMap(yesterdayStr);
+            const lastWeekMap = loadCsvMap(lastWeekStr);
+
+            // 4. Compare and Report
+            let markdownReport = `### 📉 Performance Regression Report (${todayStr})\n\n`;
+            let hasRegressions = false;
+
+            const checkRegression = (url, metricName, current, old, dateLabel) => {
+              const diff = old - current;
+              if (diff > threshold) {
+                hasRegressions = true;
+                markdownReport += `- ⚠️ **${url}** - ${metricName} dropped by **${diff}** points vs ${dateLabel} (${old} -> ${current})\n`;
+              }
+            };
+
+            todayData.forEach(page => {
+              // Compare Yesterday
+              if (yesterdayMap && yesterdayMap.has(page.path)) {
+                const y = yesterdayMap.get(page.path);
+                checkRegression(page.path, 'Performance', page.performance, y.perf, 'Yesterday');
+                checkRegression(page.path, 'Accessibility', page.accessibility, y.acc, 'Yesterday');
+              }
+
+              // Compare Last Week
+              if (lastWeekMap && lastWeekMap.has(page.path)) {
+                const w = lastWeekMap.get(page.path);
+                checkRegression(page.path, 'Performance', page.performance, w.perf, 'Last Week');
+                checkRegression(page.path, 'Accessibility', page.accessibility, w.acc, 'Last Week');
+              }
+            });
+
+            if (!hasRegressions) {
+              markdownReport += "✅ No significant regressions detected compared to yesterday or last week.";
+            }
+
+            // Output to Job Summary
+            await core.summary.addRaw(markdownReport).write();
+            
+            // Set output for the artifact step
+            core.setOutput('today_file', todayFile);
+
+      - name: Commit CSV to Repo
+        run: |
+          git config --global user.name "GitHub Action Runner"
+          git config --global user.email "actions@github.com"
+          git add ${{ env.HISTORY_DIR }}/*.csv
+          # Only commit if there are changes
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Add performance audit for $(date +'%Y-%m-%d')" && git push)
+
+      - name: Upload CSV Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-audit-${{ steps.process.outputs.today_file }}
+          path: ${{ steps.process.outputs.today_file }}

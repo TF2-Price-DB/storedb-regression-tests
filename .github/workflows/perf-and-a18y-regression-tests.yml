@@ -1,6 +1,10 @@
 name: Daily Performance & Accessibility Audit
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/perf-and-a18y-regression-tests.yml'
   schedule:
     - cron: '51 14 * * *'
   workflow_dispatch:

@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  SITE_URL: 'https://store.pricedb.io'
+  SITE_URL: 'https://pricedb.io'
   HISTORY_DIR: 'hist'
   # Limit pages for debugging
   MAX_PAGES: 250

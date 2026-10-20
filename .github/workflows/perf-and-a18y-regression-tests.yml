@@ -24,10 +24,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+
+      - name: Update npm
+        run: npm install -g npm@11.21.1
 
       - name: Install Unlighthouse
-        run: npm install -g @unlighthouse/cli puppeteer
+        run: npm install -g @unlighthouse/cli@0.19.1 puppeteer@25.15.0
 
       - name: Create Unlighthouse Config
         run: |
@@ -254,7 +257,7 @@ jobs:
           git diff --quiet && git diff --staged --quiet || (git commit -m "Add performance audit" && git push)
 
       - name: Upload CSV Artifact
-        if: always()
+        if: ${{ always() && steps.process.outputs.csv_file != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: performance-audit-result

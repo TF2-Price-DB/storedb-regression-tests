@@ -4,7 +4,7 @@ export const metrics = ['performance', 'accessibility', 'seo', 'best-practices']
 const legacyHeader = 'Path,Performance,Accessibility,SEO,Best Practices';
 const metricColumns = [
   ...performanceMetrics.map(metric => ({ label: `${metric.label} Score`, key: metric.id, property: 'metricScores' })),
-  ...performanceMetrics.map(metric => ({ label: metric.unit ? `${metric.label} (${metric.unit})` : metric.label, key: metric.id, property: 'metricValues' })),
+  ...performanceMetrics.map(metric => ({ label: metric.unit ? `${metric.label} (${metric.unit})` : metric.label, key: metric.id, property: 'metricValues', round: metric.unit === 'ms' })),
 ];
 const header = [legacyHeader, ...metricColumns.map(column => column.label)].join(',');
 
@@ -13,7 +13,10 @@ export function writeHistoryCsv(rows) {
   return header + '\n' + rows.map(row => {
     const url = new URL(row.url);
     return [url.pathname + url.search, ...metrics.map(metric => row.scores?.[metric] ?? ''),
-      ...metricColumns.map(column => row[column.property]?.[column.key] ?? 'N/A')]
+      ...metricColumns.map(column => {
+        const value = row[column.property]?.[column.key];
+        return value == null ? 'N/A' : column.round ? Math.round(value) : value;
+      })]
       .map(value => quote(String(value))).join(',');
   }).join('\n') + '\n';
 }

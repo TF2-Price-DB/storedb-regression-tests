@@ -21,7 +21,7 @@ export function renderMetricSummary(rows) {
     + '### Metric scores\n\n'
     + table('metricScores', performanceMetrics.map(metric => metric.label), value => String(value))
     + '\n### Measured values\n\n'
-    + 'Durations are shown in milliseconds, rounded to the nearest millisecond. CLS is unitless and shown to four significant digits. CSV files retain full precision.\n\n'
+    + 'Durations are rounded to the nearest millisecond. CLS is unitless and shown to four significant digits; CSV files retain its full precision.\n\n'
     + table('metricValues', performanceMetrics.map(metric => metric.unit ? `${metric.label} (${metric.unit})` : metric.label),
       (value, metric) => metric.unit === 'ms' ? String(Math.round(value)) : String(Number(value.toPrecision(4))));
 }

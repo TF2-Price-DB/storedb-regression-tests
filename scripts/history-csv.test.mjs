@@ -17,13 +17,15 @@ test('history uses the PriceDB columns and retains paths, zero scores, and failu
   assert.deepEqual(readHistoryCsv(csv.trimEnd()), readHistoryCsv(csv));
 });
 
-test('individual scores and raw metrics retain zero and fractional values', () => {
+test('duration values round to milliseconds while CLS, scores, and zeros retain their values', () => {
   const rows = [{ url: 'https://pricedb.io/convert',
     scores: Object.fromEntries(metrics.map(metric => [metric, 100])),
     metricScores: { 'largest-contentful-paint': 83, 'cumulative-layout-shift': 100, 'total-blocking-time': 0 },
     metricValues: { 'largest-contentful-paint': 2793.118, 'cumulative-layout-shift': 0.0002816448606159141, 'total-blocking-time': 0 },
   }];
-  assert.deepEqual(readHistoryCsv(writeHistoryCsv(rows), 'https://pricedb.io'), rows);
+  const expected = structuredClone(rows);
+  expected[0].metricValues['largest-contentful-paint'] = 2793;
+  assert.deepEqual(readHistoryCsv(writeHistoryCsv(rows), 'https://pricedb.io'), expected);
 });
 
 test('legacy CSVs remain readable with unknown metric values absent', () => {

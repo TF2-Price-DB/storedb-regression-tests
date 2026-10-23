@@ -13,7 +13,7 @@ History for both sites starts with the PriceDB CSV columns: `Path,Performance,Ac
 
 PriceDB history lives under `hist/pricedb/`; crit.tf history lives under `hist/crit/`. Paths are relative, and crit.tf filenames include the UTC date and time. Failed crit.tf measurements have empty score cells rather than zero scores. Both workflows obtain metric scores and raw values from their existing Lighthouse reports, without additional page loads. PriceDB uploads its full Lighthouse JSON reports alongside its CSV for future inspection.
 
-Both GitHub run summaries include per-URL tables of individual metric scores and measured values. Durations are displayed in milliseconds rounded to the nearest millisecond, CLS uses four significant digits, and unavailable measurements display `N/A`. The CSVs retain full precision.
+Both CSVs and GitHub run summaries round durations to the nearest millisecond. Summaries include per-URL tables of individual metric scores and measured values, with CLS shown to four significant digits and unavailable measurements as `N/A`. CSVs retain full precision for unitless CLS; detailed Lighthouse JSON reports retain the original duration precision.
 
 Each crit.tf run uploads its selected URLs, individual HTML/JSON Lighthouse reports, raw results, complete run metadata, CSV, and a summary as a GitHub Actions artifact. The job summary includes category medians and reports performance/accessibility median drops greater than two points against the previous CSV. Historical URLs are grouped using the current sitemap; URLs no longer in it are excluded from category comparisons. These comparisons are informational because samples change. Audit errors fail the workflow and remain visible in the report; failed URLs are not retried.
 

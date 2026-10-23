@@ -1,0 +1,61 @@
+name: Daily crit.tf Performance & Accessibility Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/crit-regression-tests.yml'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+  schedule:
+    - cron: '23 15 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: crit-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install audit dependencies and Chrome
+        run: npm ci
+      - name: Test sitemap sampling
+        run: npm test
+      - name: Audit crit.tf once per selected URL
+        id: audit
+        run: npm run audit:crit
+      - name: Upload reports and selected URLs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crit-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit-results/crit/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Commit audit history
+        if: ${{ !cancelled() && steps.audit.outcome != 'skipped' }}
+        run: |
+          if [ ! -d hist/crit ]; then exit 0; fi
+          git config user.name "GitHub Action Runner"
+          git config user.email "actions@github.com"
+          git add hist/crit/
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Add crit.tf performance audit"
+          # The pricedb.io workflow also commits history to main.
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push origin HEAD:main; then exit 0; fi
+          done
+          exit 1

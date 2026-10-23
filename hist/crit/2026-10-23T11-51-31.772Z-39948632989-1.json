@@ -1,0 +1,382 @@
+{
+  "timestamp": "2026-10-23T11:51:31.772Z",
+  "commit": "4de4f81bcbc8981a5382ef1b76a16613d25c99aa",
+  "runUrl": "https://github.com/TF2-Price-DB/storedb-regression-tests/actions/runs/39948632989",
+  "summaries": {
+    "pages": {
+      "available": 7,
+      "selected": 7,
+      "successful": 7,
+      "scores": {
+        "performance": 99,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      }
+    },
+    "users": {
+      "available": 60,
+      "selected": 5,
+      "successful": 5,
+      "scores": {
+        "performance": 91,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      }
+    },
+    "hats": {
+      "available": 81259,
+      "selected": 5,
+      "successful": 5,
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      }
+    }
+  },
+  "rows": [
+    {
+      "url": "https://crit.tf/search",
+      "categories": [
+        "pages"
+      ],
+      "finalUrl": "https://crit.tf/search",
+      "scores": {
+        "performance": 91,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 1385.063,
+        "largest-contentful-paint": 1685.063,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0.1693755914777014,
+        "server-response-time": 744
+      }
+    },
+    {
+      "url": "https://crit.tf/",
+      "categories": [
+        "pages"
+      ],
+      "finalUrl": "https://crit.tf/",
+      "scores": {
+        "performance": 99,
+        "accessibility": 96,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 1438.818,
+        "largest-contentful-paint": 1738.818,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 207
+      }
+    },
+    {
+      "url": "https://crit.tf/auctions/browse",
+      "categories": [
+        "pages"
+      ],
+      "finalUrl": "https://crit.tf/auctions/browse",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 917.566,
+        "largest-contentful-paint": 1217.566,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 199
+      }
+    },
+    {
+      "url": "https://crit.tf/leaderboard",
+      "categories": [
+        "pages"
+      ],
+      "finalUrl": "https://crit.tf/leaderboard",
+      "scores": {
+        "performance": 84,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 2343.118,
+        "largest-contentful-paint": 2793.118,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0.0002816448606159141,
+        "server-response-time": 5115
+      }
+    },
+    {
+      "url": "https://crit.tf/api-docs",
+      "categories": [
+        "pages"
+      ],
+      "finalUrl": "https://crit.tf/api-docs",
+      "scores": {
+        "performance": 91,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 92
+      },
+      "timings": {
+        "first-contentful-paint": 2673.2919999999995,
+        "largest-contentful-paint": 2673.2919999999995,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0.04551917356362951,
+        "server-response-time": 778
+      }
+    },
+    {
+      "url": "https://crit.tf/static/api-errors.html",
+      "categories": [
+        "pages"
+      ],
+      "finalUrl": "https://crit.tf/static/api-errors.html",
+      "scores": {
+        "performance": 99,
+        "accessibility": 100,
+        "seo": 91,
+        "best-practices": 92
+      },
+      "timings": {
+        "first-contentful-paint": 1553.2440000000001,
+        "largest-contentful-paint": 1553.2440000000001,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 650
+      }
+    },
+    {
+      "url": "https://crit.tf/about/javascript",
+      "categories": [
+        "pages"
+      ],
+      "finalUrl": "https://crit.tf/about/javascript",
+      "scores": {
+        "performance": 99,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 927.952,
+        "largest-contentful-paint": 1227.952,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 1254
+      }
+    },
+    {
+      "url": "https://crit.tf/item/26258",
+      "categories": [
+        "hats"
+      ],
+      "finalUrl": "https://crit.tf/item/26258",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 945.8979999999999,
+        "largest-contentful-paint": 1395.898,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 721
+      }
+    },
+    {
+      "url": "https://crit.tf/item/23139",
+      "categories": [
+        "hats"
+      ],
+      "finalUrl": "https://crit.tf/item/23139",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 1075.333,
+        "largest-contentful-paint": 1375.333,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 749
+      }
+    },
+    {
+      "url": "https://crit.tf/item/48801",
+      "categories": [
+        "hats"
+      ],
+      "finalUrl": "https://crit.tf/item/48801",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 937.252,
+        "largest-contentful-paint": 1705.878,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 757
+      }
+    },
+    {
+      "url": "https://crit.tf/item/17196",
+      "categories": [
+        "hats"
+      ],
+      "finalUrl": "https://crit.tf/item/17196",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 952.002,
+        "largest-contentful-paint": 1252.002,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 390
+      }
+    },
+    {
+      "url": "https://crit.tf/item/75915",
+      "categories": [
+        "hats"
+      ],
+      "finalUrl": "https://crit.tf/item/75915",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 903.704,
+        "largest-contentful-paint": 1203.704,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 240
+      }
+    },
+    {
+      "url": "https://crit.tf/inventory/76561198096558252",
+      "categories": [
+        "users"
+      ],
+      "finalUrl": "https://crit.tf/inventory/76561198096558252",
+      "scores": {
+        "performance": 86,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 2465.062,
+        "largest-contentful-paint": 3772.593,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 215
+      }
+    },
+    {
+      "url": "https://crit.tf/inventory/76561198095130768",
+      "categories": [
+        "users"
+      ],
+      "finalUrl": "https://crit.tf/inventory/76561198095130768",
+      "scores": {
+        "performance": 79,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 3035.335,
+        "largest-contentful-paint": 4403.0025000000005,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 220
+      }
+    },
+    {
+      "url": "https://crit.tf/inventory/76561198438820616",
+      "categories": [
+        "users"
+      ],
+      "finalUrl": "https://crit.tf/inventory/76561198438820616",
+      "scores": {
+        "performance": 91,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 1959.7190000000003,
+        "largest-contentful-paint": 3292.4955000000004,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 760
+      }
+    },
+    {
+      "url": "https://crit.tf/inventory/76561198753317862",
+      "categories": [
+        "users"
+      ],
+      "finalUrl": "https://crit.tf/inventory/76561198753317862",
+      "scores": {
+        "performance": 91,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 100
+      },
+      "timings": {
+        "first-contentful-paint": 2250.152,
+        "largest-contentful-paint": 3150.228,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 202
+      }
+    },
+    {
+      "url": "https://crit.tf/inventory/76561198069707880",
+      "categories": [
+        "users"
+      ],
+      "finalUrl": "https://crit.tf/inventory/76561198069707880",
+      "scores": {
+        "performance": 96,
+        "accessibility": 100,
+        "seo": 100,
+        "best-practices": 96
+      },
+      "timings": {
+        "first-contentful-paint": 1861.246,
+        "largest-contentful-paint": 2491.869,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "server-response-time": 708
+      }
+    }
+  ]
+}

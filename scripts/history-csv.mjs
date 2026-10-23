@@ -1,16 +1,24 @@
+import { performanceMetrics } from './lighthouse-metrics.mjs';
+
 export const metrics = ['performance', 'accessibility', 'seo', 'best-practices'];
-const header = 'Path,Performance,Accessibility,SEO,Best Practices';
+const legacyHeader = 'Path,Performance,Accessibility,SEO,Best Practices';
+const metricColumns = [
+  ...performanceMetrics.map(metric => ({ label: `${metric.label} Score`, key: metric.id, property: 'metricScores' })),
+  ...performanceMetrics.map(metric => ({ label: metric.unit ? `${metric.label} (${metric.unit})` : metric.label, key: metric.id, property: 'metricValues' })),
+];
+const header = [legacyHeader, ...metricColumns.map(column => column.label)].join(',');
 
 export function writeHistoryCsv(rows) {
   const quote = value => /[,"\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
   return header + '\n' + rows.map(row => {
     const url = new URL(row.url);
-    return [url.pathname + url.search, ...metrics.map(metric => row.scores?.[metric] ?? '')]
+    return [url.pathname + url.search, ...metrics.map(metric => row.scores?.[metric] ?? ''),
+      ...metricColumns.map(column => row[column.property]?.[column.key] ?? 'N/A')]
       .map(value => quote(String(value))).join(',');
   }).join('\n') + '\n';
 }
 
-export function readHistoryCsv(csv) {
+export function readHistoryCsv(csv, site = 'https://crit.tf') {
   const records = [];
   let record = [], value = '', quoted = false;
   for (let i = 0; i < csv.length; i++) {
@@ -26,17 +34,29 @@ export function readHistoryCsv(csv) {
   }
   if (quoted) throw new Error('Unterminated CSV field');
   if (value || record.length) records.push([...record, value]);
-  if (records.shift()?.join(',') !== header) throw new Error('Unexpected history CSV header');
+  const actualHeader = records.shift()?.join(',');
+  if (actualHeader !== header && actualHeader !== legacyHeader) throw new Error('Unexpected history CSV header');
+  const extended = actualHeader === header;
   return records.map(([pathname, ...values]) => {
-    if (!pathname || values.length !== metrics.length) throw new Error('Invalid history CSV row');
-    const scores = values.map(value => value === '' ? null : Number(value));
+    if (!pathname || values.length !== metrics.length + (extended ? metricColumns.length : 0)) throw new Error('Invalid history CSV row');
+    const scores = values.slice(0, metrics.length).map(value => value === '' ? null : Number(value));
     if (scores.some(value => value !== null && (!Number.isFinite(value) || value < 0 || value > 100))) {
       throw new Error('Invalid history score');
     }
-    return {
-      url: new URL(pathname, 'https://crit.tf').href,
+    const row = {
+      url: new URL(pathname, site).href,
       ...(scores.every(value => value !== null) ? { scores: Object.fromEntries(metrics.map((metric, i) => [metric, scores[i]])) } : {}),
     };
+    if (extended) metricColumns.forEach((column, i) => {
+      const value = values[metrics.length + i];
+      if (value === '' || value === 'N/A') return;
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0 || (column.property === 'metricScores' && number > 100)) {
+        throw new Error(`Invalid history metric: ${column.label}`);
+      }
+      (row[column.property] ??= {})[column.key] = number;
+    });
+    return row;
   });
 }
 

@@ -1,17 +1,17 @@
-Path,Performance,Accessibility,SEO,Best Practices
-/,91,91,100,100
-/convert,85,84,100,100
-/cookie-policy,93,91,100,100
-/faq,92,91,100,100
-/item/229;5;u29,83,89,100,100
-/item/30939;5;u290,82,89,100,100
-/item/31023;5;u29,83,89,100,100
-/item/31049;5;u377,86,89,100,100
-/item/31192,86,89,100,100
-/item/31480;5;u421,82,89,100,100
-/item/31559;5,87,89,100,100
-/item/554;6;uncraftable,86,89,100,100
-/privacy-policy,93,91,100,100
-/search,59,88,100,100
-/stats,84,90,100,100
-/terms-of-service,81,91,100,100
+Path,Performance,Accessibility,SEO,Best Practices,LCP Score,CLS Score,FCP Score,TBT Score,Speed Index Score,LCP (ms),CLS,FCP (ms),TBT (ms),Speed Index (ms)
+/,91,91,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/convert,85,84,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/cookie-policy,93,91,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/faq,92,91,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/229;5;u29,83,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/30939;5;u290,82,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/31023;5;u29,83,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/31049;5;u377,86,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/31192,86,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/31480;5;u421,82,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/31559;5,87,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/item/554;6;uncraftable,86,89,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/privacy-policy,93,91,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/search,59,88,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/stats,84,90,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+/terms-of-service,81,91,100,100,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A

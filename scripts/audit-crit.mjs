@@ -5,6 +5,7 @@ import { launch } from 'chrome-launcher';
 import { executablePath } from 'puppeteer';
 import { discoverCategories, selectTargets } from './crit-sitemap.mjs';
 import { metrics, readHistoryCsv, writeHistoryCsv, summarizeRows } from './history-csv.mjs';
+import { extractLighthouseMetrics } from './lighthouse-metrics.mjs';
 
 const outputDir = 'audit-results/crit';
 const historyDir = 'hist/crit';
@@ -50,6 +51,7 @@ for (const [index, target] of targets.entries()) {
     }));
     row.timings = Object.fromEntries(['first-contentful-paint', 'largest-contentful-paint', 'total-blocking-time', 'cumulative-layout-shift', 'server-response-time']
       .map(metric => [metric, result.lhr.audits[metric]?.numericValue ?? null]));
+    Object.assign(row, extractLighthouseMetrics(result.lhr));
   } catch (error) {
     row.error = error.message;
     console.error(`${target.url}: ${error.message}`);

@@ -9,10 +9,28 @@ test('history uses the PriceDB columns and retains paths, zero scores, and failu
     { url: 'https://crit.tf/item/1', error: 'Navigation failed' },
   ];
   const csv = writeHistoryCsv(rows);
-  assert.equal(csv, 'Path,Performance,Accessibility,SEO,Best Practices\n/,0,96,100,100\n"/search?a=1,2",90,90,90,90\n/item/1,,,,\n');
+  assert.ok(csv.startsWith('Path,Performance,Accessibility,SEO,Best Practices,LCP Score,CLS Score,FCP Score,TBT Score,Speed Index Score,LCP (ms),CLS,FCP (ms),TBT (ms),Speed Index (ms)\n'));
+  assert.ok(csv.includes('"/search?a=1,2",90,90,90,90,'));
+  assert.ok(csv.includes('/item/1,,,,,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A\n'));
   assert.deepEqual(readHistoryCsv(csv), rows.map(({ error, ...row }) => row));
   assert.deepEqual(readHistoryCsv(csv.replaceAll('\n', '\r\n')), readHistoryCsv(csv));
   assert.deepEqual(readHistoryCsv(csv.trimEnd()), readHistoryCsv(csv));
+});
+
+test('individual scores and raw metrics retain zero and fractional values', () => {
+  const rows = [{ url: 'https://pricedb.io/convert',
+    scores: Object.fromEntries(metrics.map(metric => [metric, 100])),
+    metricScores: { 'largest-contentful-paint': 83, 'cumulative-layout-shift': 100, 'total-blocking-time': 0 },
+    metricValues: { 'largest-contentful-paint': 2793.118, 'cumulative-layout-shift': 0.0002816448606159141, 'total-blocking-time': 0 },
+  }];
+  assert.deepEqual(readHistoryCsv(writeHistoryCsv(rows), 'https://pricedb.io'), rows);
+});
+
+test('legacy CSVs remain readable with unknown metric values absent', () => {
+  const rows = readHistoryCsv('Path,Performance,Accessibility,SEO,Best Practices\n/,99,96,100,100\n');
+  assert.equal(rows[0].scores.performance, 99);
+  assert.equal(rows[0].metricScores, undefined);
+  assert.deepEqual(readHistoryCsv(writeHistoryCsv(rows)), rows);
 });
 
 test('CSV history reconstructs category comparisons without treating failed scores as zero', () => {

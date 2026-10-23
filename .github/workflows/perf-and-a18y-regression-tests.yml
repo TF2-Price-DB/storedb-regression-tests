@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/perf-and-a18y-regression-tests.yml'
+      - 'scripts/history-csv.mjs'
+      - 'scripts/lighthouse-metrics.mjs'
   schedule:
     - cron: '51 14 * * *'
   workflow_dispatch:
@@ -55,6 +57,7 @@ jobs:
               maxPages: ${{ env.MAX_PAGES }},
             },
             debug: true,
+            ci: { buildStatic: false },
             outputPath: '.unlighthouse'
           }
           EOF
@@ -69,6 +72,9 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
+            const { pathToFileURL } = require('url');
+            const { writeHistoryCsv, readHistoryCsv } = await import(pathToFileURL(path.resolve('scripts/history-csv.mjs')).href);
+            const { extractLighthouseMetrics, loadLighthouseReports } = await import(pathToFileURL(path.resolve('scripts/lighthouse-metrics.mjs')).href);
 
             // --- Configuration ---
             const historyDir = process.env.HISTORY_DIR;
@@ -119,6 +125,7 @@ jobs:
 
             // 3. Process Data
             const todayData = [];
+            const lighthouseReports = await loadLighthouseReports(unlighthouseBaseDir);
             
             rawData.forEach((route, index) => {
               if (!route.path) return;
@@ -140,12 +147,15 @@ jobs:
               // Only add if we actually found data (assuming 0 might be valid but rare for all)
               // We check if performance is > 0 to imply a successful scan
               if (p > 0 || a > 0) {
+                 const report = lighthouseReports.get(route.path);
+                 if (!report) throw new Error(`Missing Lighthouse metric report for ${route.path}`);
                  todayData.push({
                     path: route.path,
                     performance: p,
                     accessibility: a,
                     seo: s,
-                    bestPractices: b
+                    bestPractices: b,
+                    ...extractLighthouseMetrics(report)
                  });
               } else {
                  console.log(`Skipping ${route.path} - Seems like 0 scores (Scan failed?)`);
@@ -178,12 +188,12 @@ jobs:
             const finalFilePath = path.join(historyDir, filename);
 
             // 5. Save CSV
-            const header = 'Path,Performance,Accessibility,SEO,Best Practices\n';
-            const csvRows = todayData.map(r => 
-              `${r.path},${r.performance},${r.accessibility},${r.seo},${r.bestPractices}`
-            ).join('\n');
-            
-            fs.writeFileSync(finalFilePath, header + csvRows);
+            fs.writeFileSync(finalFilePath, writeHistoryCsv(todayData.map(row => ({
+              url: new URL(row.path, process.env.SITE_URL).href,
+              scores: { performance: row.performance, accessibility: row.accessibility, seo: row.seo, 'best-practices': row.bestPractices },
+              metricScores: row.metricScores,
+              metricValues: row.metricValues,
+            }))));
             console.log(`✅ Saved results to ${finalFilePath}`);
 
             // 6. Historical Comparison 
@@ -199,13 +209,12 @@ jobs:
               if (!fs.existsSync(file)) return null;
               
               try {
-                const content = fs.readFileSync(file, 'utf8').trim().split('\n');
+                const rows = readHistoryCsv(fs.readFileSync(file, 'utf8'), process.env.SITE_URL);
                 const map = new Map();
-                content.slice(1).forEach(row => {
-                  const cols = row.split(',');
-                  if (cols.length >= 3) {
-                    map.set(cols[0], { perf: parseInt(cols[1]), acc: parseInt(cols[2]) });
-                  }
+                rows.forEach(row => {
+                  if (!row.scores) return;
+                  const url = new URL(row.url);
+                  map.set(url.pathname + url.search, { perf: row.scores.performance, acc: row.scores.accessibility });
                 });
                 return map;
               } catch (e) {
@@ -258,7 +267,14 @@ jobs:
           git config --global user.name "GitHub Action Runner"
           git config --global user.email "actions@github.com"
           git add ${{ steps.process.outputs.csv_file }}
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Add performance audit" && git push)
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Add performance audit"
+          # The crit.tf workflow can commit history while this audit is running.
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push origin HEAD:main; then exit 0; fi
+          done
+          exit 1
 
       - name: Upload CSV Artifact
         if: ${{ always() && steps.process.outputs.csv_file != '' }}
@@ -266,3 +282,12 @@ jobs:
         with:
           name: performance-audit-result
           path: ${{ steps.process.outputs.csv_file }}
+      - name: Upload detailed Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pricedb-lighthouse-reports-${{ github.run_id }}
+          path: .unlighthouse/**/lighthouse.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

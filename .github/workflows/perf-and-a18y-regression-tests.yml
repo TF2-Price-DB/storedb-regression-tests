@@ -14,7 +14,7 @@ permissions:
 
 env:
   SITE_URL: 'https://pricedb.io'
-  HISTORY_DIR: 'hist'
+  HISTORY_DIR: 'hist/pricedb'
   # Limit pages for debugging
   MAX_PAGES: 250
 

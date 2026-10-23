@@ -4,6 +4,7 @@ import lighthouse from 'lighthouse';
 import { launch } from 'chrome-launcher';
 import { executablePath } from 'puppeteer';
 import { discoverCategories, selectTargets } from './crit-sitemap.mjs';
+import { metrics, readHistoryCsv, writeHistoryCsv, summarizeRows } from './history-csv.mjs';
 
 const outputDir = 'audit-results/crit';
 const historyDir = 'hist/crit';
@@ -16,7 +17,6 @@ for (const [category, urls] of categories) {
   console.log(`${category}: ${urls.size} available, ${targets.filter(t => t.categories.includes(category)).length} selected`);
 }
 
-const metrics = ['performance', 'accessibility', 'seo', 'best-practices'];
 const rows = [];
 for (const [index, target] of targets.entries()) {
   console.log(`[${index + 1}/${targets.length}] ${target.url}`);
@@ -60,31 +60,25 @@ for (const [index, target] of targets.entries()) {
   await fs.writeFile(`${outputDir}/results.json`, JSON.stringify(rows, null, 2));
 }
 
-const median = values => {
-  if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-};
-const summaries = Object.fromEntries([...categories].map(([category, urls]) => {
-  const selected = rows.filter(row => row.categories.includes(category));
-  const successful = selected.filter(row => row.scores);
-  return [category, {
-    available: urls.size, selected: selected.length, successful: successful.length,
-    scores: Object.fromEntries(metrics.map(metric => [metric, median(successful.map(row => row.scores[metric]))])),
-  }];
-}));
-const historyFiles = (await fs.readdir(historyDir)).filter(file => file.endsWith('.json')).sort();
+const summaries = summarizeRows(rows, categories);
+const historyFiles = (await fs.readdir(historyDir)).filter(file => file.endsWith('.csv')).sort();
 const previous = historyFiles.length
-  ? JSON.parse(await fs.readFile(path.join(historyDir, historyFiles.at(-1)), 'utf8')) : null;
+  ? {
+    filename: historyFiles.at(-1),
+    summaries: summarizeRows(readHistoryCsv(await fs.readFile(path.join(historyDir, historyFiles.at(-1)), 'utf8')), categories),
+  } : null;
 const run = {
   timestamp: new Date().toISOString(),
   commit: process.env.GITHUB_SHA ?? null,
   runUrl: process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
   summaries, rows,
 };
-const filename = `${run.timestamp.replaceAll(':', '-')}-${process.env.GITHUB_RUN_ID ?? 'local'}-${process.env.GITHUB_RUN_ATTEMPT ?? '1'}.json`;
-await fs.writeFile(path.join(historyDir, filename), JSON.stringify(run, null, 2) + '\n');
+// Keep complete metadata in the artifact; committed history uses the PriceDB CSV columns.
+await fs.writeFile(`${outputDir}/run.json`, JSON.stringify(run, null, 2) + '\n');
+const filename = `${run.timestamp.split('.')[0].replace('T', '_').replaceAll(':', '-')}.csv`;
+const csv = writeHistoryCsv(rows);
+await fs.writeFile(path.join(historyDir, filename), csv);
+await fs.writeFile(path.join(outputDir, filename), csv);
 
 let summary = '# crit.tf performance and accessibility audit\n\n';
 summary += `${rows.length} distinct URLs, one Lighthouse navigation per URL. Mobile Lighthouse defaults. No target-page discovery requests or retries.\n\n`;
@@ -94,12 +88,12 @@ for (const [category, stats] of Object.entries(summaries)) {
 }
 summary += '\nAll pages are included. Other categories use up to five randomly selected distinct URLs across all their sitemap shards. Categories with fewer than five URLs use all available URLs. Samples rotate between runs; server caches may already be warm from other traffic.\n\n';
 if (previous) {
-  summary += `## Comparison with previous run (${previous.timestamp})\n\n`;
+  summary += `## Comparison with previous run (${previous.filename})\n\n`;
   const regressions = [];
   for (const [category, stats] of Object.entries(summaries)) {
     // Only compare complete categories; sampled category medians are a signal, not a controlled benchmark.
     const old = previous.summaries[category];
-    if (!old || old.successful !== old.selected || stats.successful !== stats.selected) continue;
+    if (!old?.selected || old.successful !== old.selected || stats.successful !== stats.selected) continue;
     for (const metric of ['performance', 'accessibility']) {
       if (old.scores[metric] - stats.scores[metric] > 2) {
         regressions.push(`- ${category}: ${metric} median ${old.scores[metric]} → ${stats.scores[metric]}`);

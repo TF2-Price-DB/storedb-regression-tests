@@ -6,6 +6,7 @@ import { executablePath } from 'puppeteer';
 import { discoverCategories, selectTargets } from './crit-sitemap.mjs';
 import { metrics, readHistoryCsv, writeHistoryCsv, summarizeRows } from './history-csv.mjs';
 import { extractLighthouseMetrics } from './lighthouse-metrics.mjs';
+import { renderMetricSummary } from './metric-summary.mjs';
 
 const outputDir = 'audit-results/crit';
 const historyDir = 'hist/crit';
@@ -111,6 +112,7 @@ summary += '\n## Individual results\n\n| URL | Categories | Performance | Access
 for (const row of rows) {
   summary += `| ${row.url} | ${row.categories.join(', ')} | ${row.scores?.performance ?? '—'} | ${row.scores?.accessibility ?? '—'} | ${row.error ? row.error.replaceAll('|', '\\|').replaceAll('\n', ' ') : 'OK'} |\n`;
 }
+summary += renderMetricSummary(rows);
 await fs.writeFile(`${outputDir}/summary.md`, summary);
 if (process.env.GITHUB_STEP_SUMMARY) await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
 console.log(summary);

@@ -7,6 +7,7 @@ on:
       - '.github/workflows/perf-and-a18y-regression-tests.yml'
       - 'scripts/history-csv.mjs'
       - 'scripts/lighthouse-metrics.mjs'
+      - 'scripts/metric-summary.mjs'
   schedule:
     - cron: '51 14 * * *'
   workflow_dispatch:
@@ -75,6 +76,7 @@ jobs:
             const { pathToFileURL } = require('url');
             const { writeHistoryCsv, readHistoryCsv } = await import(pathToFileURL(path.resolve('scripts/history-csv.mjs')).href);
             const { extractLighthouseMetrics, loadLighthouseReports } = await import(pathToFileURL(path.resolve('scripts/lighthouse-metrics.mjs')).href);
+            const { renderMetricSummary } = await import(pathToFileURL(path.resolve('scripts/metric-summary.mjs')).href);
 
             // --- Configuration ---
             const historyDir = process.env.HISTORY_DIR;
@@ -259,6 +261,11 @@ jobs:
               markdownReport += `\n**Total Regressions:** ${regressionCount}`;
             }
 
+            markdownReport += renderMetricSummary(todayData.map(row => ({
+              url: new URL(row.path, process.env.SITE_URL).href,
+              metricScores: row.metricScores,
+              metricValues: row.metricValues,
+            })));
             await core.summary.addRaw(markdownReport).write();
             core.setOutput('csv_file', finalFilePath);
 

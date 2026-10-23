@@ -13,6 +13,8 @@ History for both sites starts with the PriceDB CSV columns: `Path,Performance,Ac
 
 PriceDB history lives under `hist/pricedb/`; crit.tf history lives under `hist/crit/`. Paths are relative, and crit.tf filenames include the UTC date and time. Failed crit.tf measurements have empty score cells rather than zero scores. Both workflows obtain metric scores and raw values from their existing Lighthouse reports, without additional page loads. PriceDB uploads its full Lighthouse JSON reports alongside its CSV for future inspection.
 
+Both GitHub run summaries include per-URL tables of individual metric scores and measured values. Durations are displayed in milliseconds rounded to the nearest millisecond, CLS uses four significant digits, and unavailable measurements display `N/A`. The CSVs retain full precision.
+
 Each crit.tf run uploads its selected URLs, individual HTML/JSON Lighthouse reports, raw results, complete run metadata, CSV, and a summary as a GitHub Actions artifact. The job summary includes category medians and reports performance/accessibility median drops greater than two points against the previous CSV. Historical URLs are grouped using the current sitemap; URLs no longer in it are excluded from category comparisons. These comparisons are informational because samples change. Audit errors fail the workflow and remain visible in the report; failed URLs are not retried.
 
 Use Node.js 24, `npm ci`, and `npm test` to check selection logic. `npm run audit:crit` performs a live audit and writes local reports under `audit-results/crit/` and history under `hist/crit/`. Avoid live runs solely for testing, since they can warm the site's caches.
